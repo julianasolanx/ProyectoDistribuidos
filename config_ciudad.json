@@ -1,0 +1,15 @@
+{
+  "dimensiones": {
+    "filas": ["A", "B", "C", "D"],
+    "columnas": [1, 2, 3, 4]
+  },
+  "configuracion_global": {
+    "tiempo_semaforo_normal_seg": 15
+  },
+  "intersecciones": [
+    {"id": "INT_A1", "coordenadas": [0, 0]}, {"id": "INT_A2", "coordenadas": [0, 1]}, {"id": "INT_A3", "coordenadas": [0, 2]}, {"id": "INT_A4", "coordenadas": [0, 3]},
+    {"id": "INT_B1", "coordenadas": [1, 0]}, {"id": "INT_B2", "coordenadas": [1, 1]}, {"id": "INT_B3", "coordenadas": [1, 2]}, {"id": "INT_B4", "coordenadas": [1, 3]},
+    {"id": "INT_C1", "coordenadas": [2, 0]}, {"id": "INT_C2", "coordenadas": [2, 1]}, {"id": "INT_C3", "coordenadas": [2, 2]}, {"id": "INT_C4", "coordenadas": [2, 3]},
+    {"id": "INT_D1", "coordenadas": [3, 0]}, {"id": "INT_D2", "coordenadas": [3, 1]}, {"id": "INT_D3", "coordenadas": [3, 2]}, {"id": "INT_D4", "coordenadas": [3, 3]}
+  ]
+}
