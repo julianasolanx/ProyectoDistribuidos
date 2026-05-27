@@ -67,6 +67,12 @@ Diseñar, implementar y evaluar el rendimiento de una plataforma distribuida ori
 
 En esta sección se fundamentan las bases teóricas y el diseño estructural de la plataforma GITU, asociando cada modelo conceptual con su respectivo diagrama de soporte técnico.
 
+== Modelo Arquitectónico y de Componentes
+
+== Modelo Físico y de Despliegue
+
+
+
 
 
 
