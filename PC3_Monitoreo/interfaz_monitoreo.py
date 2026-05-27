@@ -124,7 +124,7 @@ def main():
 
     # Conexión directa al PC2 para control manual prioritario
     socket_req_analitica = context.socket(zmq.REQ)
-    socket_req_analitica.connect(f"tcp://127.0.0.1:{PORT_REP_ANALITICA}")
+    socket_req_analitica.connect(f"tcp://{IP_REPLICA}:{PORT_REP_ANALITICA}")
     socket_req_analitica.setsockopt(zmq.RCVTIMEO, 2000)
 
     while True:
