@@ -192,6 +192,7 @@ La asignación equilibrada de recursos (*4 vCores* y *2 GB de RAM* para cada nod
 
 El sistema está diseñado para un despliegue distribuido en tres computadores o entornos virtuales independientes (`PC1`, `PC2`, y `PC3`), interactuando mediante protocolos TCP/IP.
 
+
 == Modelo de interacción
 
 Este modelo detalla la arquitectura de software interna mediante un diagrama de clases estructurado, y el flujo de los mensajes mediante diagramas de secuencia para los escenarios clave.
@@ -282,6 +283,52 @@ El sistema implementa un *mecanismo de reconciliación automática diferencial*:
 
 El sistema adopta políticas de diseño robustas ("Hardened Design") para mitigar los vectores de ataque comunes en entornos distribuidos industriales y redes IoT urbanas:
 
+- *Aislamiento de Interfaces de Red y Comportamiento ante Escaneos (Nmap):* Al desplegar el sistema distribuido utilizando direcciones IP de redes privadas o de superposición (como la red VPN/mesh de Tailscale en el rango CGNAT `100.64.0.0/10` de tus dispositivos), los sockets de ZeroMQ se asocian de forma exclusiva a estas interfaces de confianza mediante la vinculación directa (`bind` a la IP de la interfaz interna). Esto genera dos escenarios deterministas en términos de visibilidad ante escaneos de red:
+  1. *Escaneo desde el exterior (Internet Pública):* Si un atacante realiza un escaneo de puertos (e.g., `nmap -sS -p 5555-5565 <IP_PÚBLICA>`) sobre la IP pública de cualquiera de los tres PC, los puertos de la plataforma se reportarán como `filtered` o `closed`. Esto ocurre porque los sockets de ZMQ no están escuchando en la interfaz física de red pública y los cortafuegos del sistema operativo o del proveedor descartan estos paquetes. La superficie de ataque externa se reduce a cero.
+  2. *Escaneo desde el interior de la red privada:* Si se realiza el escaneo desde una de las máquinas autorizadas dentro del segmento VPN (e.g., desde el PC3 `100.90.114.97` hacia el PC2 `100.87.47.66` con `nmap -sS -p 5557,5559,5561,5562,5565 100.87.47.66`), los puertos correspondientes a esos servicios se reportarán como `open` (abiertos). Esto valida que la visibilidad de los canales de comunicación está perfectamente acotada y protegida dentro del perímetro de red privada establecido.
+
+=== Aplicación del Modelo de Seguridad: Cubo de McCumber
+
+Para evaluar la seguridad de la plataforma GITU de forma holística, se aplica el **Cubo de McCumber**, un marco estándar industrial que analiza la seguridad de la información a través de tres dimensiones críticas: Atributos de Seguridad (Confidencialidad, Integridad y Disponibilidad), Estados de los Datos (Tránsito, Procesamiento y Almacenamiento), y Salvaguardas (Tecnología, Políticas/Prácticas y Factor Humano).
+
+A continuación se detalla la matriz de aplicación de este modelo de $3 * 3 * 3$ sobre nuestro sistema distribuido:
+
+#figure(
+  table(
+    columns: (1.2fr, 1.5fr, 1.5fr, 1.5fr),
+    stroke: 0.5pt + black,
+    fill: none,
+    align: (col, row) => if row == 0 { center + horizon } else { left + horizon },
+    table.header(
+      [*Dimensión*],
+      [*Tránsito / Transmisión*],
+      [*Procesamiento*],
+      [*Almacenamiento / Reposo*],
+    ),
+    [*Confidencialidad*],
+    [Las comunicaciones se realizan sobre la red privada virtual de Tailscale (rango `100.64.0.0/10`), cifrando los flujos TCP de ZeroMQ de extremo a extremo.],
+    [El servicio de Analítica en PC2 aísla el contexto de las decisiones y descarta buffers en memoria de inmediato para evitar dumps de RAM.],
+    [Los archivos de SQLite en el PC2 y PC3 están protegidos bajo permisos de usuario locales de Unix, evitando la lectura no autorizada del disco físico.],
+
+    [*Integridad*],
+    [Se previene la alteración de datos mediante la verificación de delimitadores estructurales de tópicos y firmas de serialización JSON en el Broker.],
+    [La capa `ValidadorSeguridad` en el PC2 inspecciona y sanitiza cada payload analizando esquemas fijos de tipos de datos, rechazando strings maliciosos y flujos corruptos.],
+    [SQLite garantiza transacciones ACID nativas, asegurando que ninguna inserción parcial corrompa el histórico ante caídas imprevistas de energía o de software.],
+
+    [*Disponibilidad*],
+    [La red mesh de Tailscale auto-enruta el tráfico de red de forma óptima ante caídas de enlaces físicos perimetrales.],
+    [El motor de analítica utiliza buffers no bloqueantes (`zmq.NOBLOCK`) para evitar que el fallo del PC3 bloquee el procesamiento en tiempo real.],
+    [Se implementa enmascaramiento con conmutación (*failover*) automática al PC2 (2 segundos de timeout) y reconciliación diferencial automática post-falla.],
+  ),
+  caption: [Matriz del Cubo de McCumber: Relación entre Atributos de Seguridad y Estados de los Datos en la plataforma GITU.],
+) <tabla-mccumber>
+
+Adicionalmente, estas interacciones se respaldan mediante tres tipos de **Salvaguardas**:
+
+1. *Tecnología (Medidas Técnicas):* Middleware ZeroMQ (sockets PUSH/PULL/REQ/REP), SQLite local, validadores tipados en Python y VPN de superposición para aislamiento.
+2. *Políticas y Prácticas (Medidas Operativas):* Validación determinista estricta de payloads, sanitización de identificadores con control de longitud y políticas de inserción de control en la base de datos.
+3. *Factor Humano (Educación y Operación):* Una interfaz interactiva en consola para el operador que restringe las acciones posibles y previene el error humano o la inyección manual errónea de comandos hacia el hardware del semáforo.
+
 === Capa de Validación Estructural y de Tipos (`ValidadorSeguridad`)
 Ubicada en el punto de entrada de procesamiento del PC2, valida de manera determinista cada mensaje recibido 
 desde el broker antes de pasarlo al motor de decisiones.
@@ -300,6 +347,10 @@ Esto bloquea intentos de inyectar rutas de archivos o caracteres de escape SQL (
 - *Control de Longitud:* En los comandos de control manual por REP, se valida rigurosamente la longitud máxima del identificador de la intersección (`len(interseccion_m) > 10`) para prevenir vulnerabilidades de desbordamiento de búfer en memoria o ejecuciones imprevistas de scripts.
 
 === Aislamiento de Red y Seguridad de Arquitectura
+
+- *Aislamiento de Interfaces de Red y Comportamiento ante Escaneos (Nmap):* Al desplegar el sistema distribuido utilizando direcciones IP de redes privadas o de superposición (como la red VPN/mesh de Tailscale en el rango CGNAT `100.64.0.0/10` de tus dispositivos), los sockets de ZeroMQ se asocian de forma exclusiva a estas interfaces de confianza mediante la vinculación directa (`bind` a la IP de la interfaz interna). Esto genera dos escenarios deterministas en términos de visibilidad ante escaneos de red:
+  1. *Escaneo desde el exterior (Internet Pública):* Si un atacante realiza un escaneo de puertos (e.g., `nmap -sS -p 5555-5565 <IP_PÚBLICA>`) sobre la IP pública de cualquiera de los tres PC, los puertos de la plataforma se reportarán como `filtered` o `closed`. Esto ocurre porque los sockets de ZMQ no están escuchando en la interfaz física de red pública y los cortafuegos del sistema operativo o del proveedor descartan estos paquetes. La superficie de ataque externa se reduce a cero.
+  2. *Escaneo desde el interior de la red privada:* Si se realiza el escaneo desde una de las máquinas autorizadas dentro del segmento VPN (e.g., desde el PC3 `100.90.114.97` hacia el PC2 `100.87.47.66` con `nmap -sS -p 5557,5559,5561,5562,5565 100.87.47.66`), los puertos correspondientes a esos servicios se reportarán como `open` (abiertos). Esto valida que la visibilidad de los canales de comunicación está perfectamente acotada y protegida dentro del perímetro de red privada establecido.
 
 - *Desacoplamiento de Productores:* Los sensores en PC1 jamás conocen la dirección IP ni los puertos del servicio de analítica (PC2), ni los puertos de almacenamiento de base de datos en PC3. El único punto de contacto público de los sensores es la IP del Broker ZMQ. Esto reduce drásticamente la superficie de ataque y el riesgo de ataques directos de denegación de servicio (DoS) a los procesadores del sistema.
 
