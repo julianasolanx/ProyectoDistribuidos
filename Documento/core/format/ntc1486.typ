@@ -96,11 +96,11 @@
     v(1em)
   }
 
-  // Formato para Tablas, Figuras y Cuadros según la norma
+  
   show figure.where(kind: table): it => {
-    v(2em) // 2 interlineas antes
+    v(2em) 
     set align(center)
-    // Título arriba: Tabla X. Nombre
+    
     block(width: 100%, align(left)[
       #set text(size: 12pt)
       *Tabla #it.counter.display().* #it.caption.body
@@ -108,14 +108,14 @@
     v(0.5em)
     it.body
     v(0.5em)
-    // Fuente abajo
+    
     if it.has("supplement") {
       align(left)[#set text(size: 10pt); #it.supplement]
     }
-    v(2em) // 2 interlineas después
+    v(2em) 
   }
 
-  // Función interna para renderizar los autores uno debajo del otro en mayúscula sostenida
+
   let render-authors() = {
     if type(author) == array {
       author.map(a => text(weight: "bold")[#upper(a)]).join([\ \ ])
@@ -124,11 +124,11 @@
     }
   }
 
-  // --- CUBIERTA (Página 1) ---
+  
   if title != "" {
     pagebreak(weak: true)
     align(center)[
-      #v(1cm) // Compensa los 3cm de margen para dar 4cm al título
+      #v(1cm) 
       #text(weight: "bold")[#upper(title)]
 
       #if subtitle != "" [
@@ -137,7 +137,7 @@
       ]
 
       #v(4cm)
-      // Renderiza todos los autores alineados y apilados verticalmente
+      
       #render-authors()
 
       #v(1fr)
@@ -152,7 +152,7 @@
     pagebreak()
   }
 
-  // --- PORTADA (Página 2) ---
+ 
   if title != "" {
     align(center)[
       #v(1cm)
@@ -163,14 +163,14 @@
       #render-authors()
 
       #v(2.5cm)
-      // Leyenda del trabajo (Clase de trabajo realizado)
+    
       #align(center)[
         #set block(width: 60%)
         #text(size: 11pt)[#work-type]
       ]
 
       #v(1.5cm)
-      // Datos del Asesor
+     
       #if advisor != "" [
         Asesor: #advisor #if advisor-title != "" [, #advisor-title]
       ]
@@ -187,7 +187,7 @@
     pagebreak()
   }
 
-  // --- TABLA DE CONTENIDO (Página 3) ---
+ 
   if show-toc {
     outline(
       title: "CONTENIDO",
@@ -196,7 +196,7 @@
     )
   }
 
-  // --- TABLA DE FIGURAS (Especiales de tipo imagen) ---
+ 
   if show-figures-list {
     outline(
       title: "LISTA DE FIGURAS",
@@ -204,7 +204,7 @@
     )
   }
 
-  // --- TABLA DE TABLAS (Especiales de tipo tabla) ---
+
   if show-tables-list {
     outline(
       title: "LISTA DE TABLAS",
