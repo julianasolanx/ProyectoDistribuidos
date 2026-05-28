@@ -1,178 +1,179 @@
 # Plataforma de Gestión Inteligente de Tráfico Urbano (GITU)
 
-Este proyecto implementa una plataforma distribuida orientada a eventos para el monitoreo, análisis y control inteligente de tráfico urbano en tiempo real. Utiliza la librería de mensajería **ZeroMQ (ZMQ)** como middleware para desacoplar la ingesta de sensores, el motor lógico de analítica, el control de semáforos y los servicios de monitoreo de usuario.
+Este proyecto implementa una plataforma distribuida orientada a eventos para el monitoreo, análisis y control de tráfico urbano en tiempo real. Utiliza **ZeroMQ (ZMQ)** para desacoplar la ingesta de datos, la analítica, el control semafórico y la interfaz del operador.
 
-El sistema simula una cuadrícula de $N \times M$ intersecciones y cuenta con un mecanismo robusto de **tolerancia a fallos por enmascaramiento con conmutación (failover) transparente** y **sincronización diferencial automática** para mantener la consistencia eventual entre la base de datos principal y su réplica activa.
-
----
-
-## 🛠️ Requisitos de Sistema y Dependencias
-
-La plataforma es altamente portátil y autocompilable. Solo requiere de Python 3 y la biblioteca de red ZeroMQ.
-
-1. **Python 3.8+** instalado en todas las máquinas.
-2. Instalar el paquete de comunicación **PyZMQ**:
-   ```bash
-   pip install pyzmq
-   ```
-   *(SQLite no requiere instalación ya que hace parte de la biblioteca estándar de Python).*
+El sistema simula una grilla de intersecciones y cuenta con tolerancia a fallos mediante conmutación automática (*failover*) y sincronización diferencial para consistencia eventual entre la base de datos principal y su réplica.
 
 ---
 
-## 📐 Estructura de Distribución de Componentes
+## 📐 Arquitectura de Red y Flujo de Datos
 
-La plataforma se distribuye físicamente en tres nodos independientes:
+El sistema se distribuye en tres nodos físicos o virtuales:
 
-*   **PC1: Capa de Ingesta (Sensores & Broker)**
-    *   `broker_zmq.py` / `broker_multihilo_zmq.py`: Dispositivo central Proxy XSUB/XPUB.
-    *   `simulador_sensores.py`: Procesos independientes que simulan Cámaras (CAM), GPS y Espiras Inductivas (ESP).
-*   **PC2: Procesamiento y Control (Analítica, Actuación & Réplica)**
-    *   `servicio_analitica.py`: Motor de correlación de reglas de tráfico y validador de seguridad.
-    *   `control_semaforos.py`: Actuadores lógicos que controlan las luces de Calle y Carrera.
-    *   `base_datos_replica.py`: Respaldo en caliente de persistencia y servidor de consultas en failover.
-*   **PC3: Persistencia y Monitoreo (Centralización & Operación)**
-    *   `base_datos_principal.py`: Histórico centralizado y motor de consistencia.
-    *   `interfaz_monitoreo.py`: Consola interactiva para consultas históricas y priorización de emergencias (Ola Verde).
-
----
-
-## 🖥️ Opción A: Ejecución en Entorno Local (127.0.0.1)
-
-Para realizar una prueba de concepto rápida en una sola máquina física usando terminales separadas, ejecuta los siguientes comandos en orden estricto:
-
-### Paso 1: Inicializar el PC1 (Ingesta)
-Abre una terminal y levanta el Broker central:
-```bash
-python PC1_Sensores/broker_zmq.py 127.0.0.1 5555 5556
+```mermaid
+graph TD
+    PC1_Sensors[Sensores - PC1 100.110.49.29] -->|PUB tcp:5555| Broker[Broker ZMQ - PC1 100.110.49.29]
+    Broker -->|SUB tcp:5556| Analitica[Servicio Analítica - PC2 100.87.47.66]
+    Analitica -->|PUSH tcp:5557| Semaforos[Control Semáforos - PC2 100.87.47.66]
+    Analitica -->|PUSH tcp:5558| BD_Principal[BD Principal - PC3 100.90.114.97:5558]
+    Analitica -->|PUSH tcp:5559| BD_Replica[BD Réplica - PC2 100.87.47.66:5559]
+    BD_Principal -->|REQ/REP tcp:5561| BD_Replica
+    Monitoreo[Interfaz Monitoreo - PC3 100.90.114.97] -->|REQ/REP tcp:5560| BD_Principal
+    Monitoreo -.->|Failover REQ/REP tcp:5565| BD_Replica
+    Monitoreo -->|REQ/REP tcp:5562| Analitica
 ```
 
-### Paso 2: Inicializar el PC2 (Control & Réplica)
-Abre dos terminales adicionales para los servicios de soporte del PC2:
-*   **Terminal de Semáforos:**
+---
+
+## 🛠️ Requisitos e Instalación
+
+En cada una de las tres máquinas se debe tener instalado Python 3 y la biblioteca de comunicación PyZMQ:
+
+```bash
+pip install pyzmq
+```
+
+---
+
+## 🌐 Guía de Ejecución Distribuida Real (Tus IPs)
+
+Para desplegar el sistema distribuido de forma real en tus tres nodos configurados, ejecuta los comandos en sus respectivas máquinas **siguiendo estrictamente el orden numérico de los pasos**:
+
+### 🎯 Direcciones IP del Entorno:
+*   **PC1 (Ingesta):** `100.110.49.29`
+*   **PC2 (Procesamiento y Control):** `100.87.47.66`
+*   **PC3 (Persistencia y Monitoreo):** `100.90.114.97`
+
+---
+
+### 1️⃣ PASO 1: Iniciar el Broker en el PC1 (`100.110.49.29`)
+Abre una terminal en el **PC1** y arranca el intermediario de mensajería (puedes elegir el broker monohilo o el multihilo):
+
+*   **Opción estándar (Secuencial):**
     ```bash
-    python PC2_Procesamiento/control_semaforos.py 127.0.0.1 5557
+    python PC1_Sensores/broker_zmq.py 100.110.49.29 5555 5556
     ```
-*   **Terminal de BD Réplica:**
+*   **Opción multihilo (Alto rendimiento):**
     ```bash
-    python PC2_Procesamiento/base_datos_replica.py 127.0.0.1 5559 5565
+    python PC1_Sensores/broker_multihilo_zmq.py 100.110.49.29 5555 5556
     ```
 
-### Paso 3: Inicializar el PC3 (Persistencia Principal)
-Abre una terminal para la Base de Datos Principal:
+---
+
+### 2️⃣ PASO 2: Iniciar Servicios de Soporte en el PC2 (`100.87.47.66`)
+Abre **dos terminales independientes** en el **PC2**:
+
+*   **Terminal A - Control de Semáforos:**
+    ```bash
+    python PC2_Procesamiento/control_semaforos.py 100.87.47.66 5557
+    ```
+*   **Terminal B - Base de Datos Réplica (Respaldo):**
+    ```bash
+    python PC2_Procesamiento/base_datos_replica.py 100.87.47.66 5559 5565
+    ```
+
+---
+
+### 3️⃣ PASO 3: Iniciar Persistencia Principal en el PC3 (`100.90.114.97`)
+Abre una terminal en el **PC3** y levanta el servidor de base de datos principal:
+
 ```bash
-python PC3_Monitoreo/base_datos_principal.py 127.0.0.1 5558 5560 127.0.0.1
+python PC3_Monitoreo/base_datos_principal.py 100.90.114.97 5558 5560 100.87.47.66
 ```
 
-### Paso 4: Inicializar el Procesamiento Lógico en el PC2
-Abre otra terminal y ejecuta el motor de analítica, el cual integra todas las tuberías de red:
+---
+
+### 4️⃣ PASO 4: Levantar el Servicio de Analítica en el PC2 (`100.87.47.66`)
+Abre una **tercera terminal** en el **PC2** y arranca el motor lógico que orquesta todas las tuberías:
+
 ```bash
-python PC2_Procesamiento/servicio_analitica.py 127.0.0.1 127.0.0.1 5556 127.0.0.1 5557 127.0.0.1 5558 127.0.0.1 5559 5562
+python PC2_Procesamiento/servicio_analitica.py 100.87.47.66 100.110.49.29 5556 100.87.47.66 5557 100.90.114.97 5558 100.87.47.66 5559 5562
 ```
 
-### Paso 5: Lanzar la Red de Sensores (PC1)
-Lanza sensores independientes para simular el tráfico en una intersección de prueba (por ejemplo, `INT_C3`):
+---
+
+### 5️⃣ PASO 5: Simular Inyección de Sensores en el PC1 (`100.110.49.29`)
+Abre terminales adicionales en el **PC1** para simular la red de sensores de una intersección de prueba (ej. `INT_C3`):
+
 *   **Sensor de Cámara (Cola de vehículos):**
     ```bash
-    python PC1_Sensores/simulador_sensores.py tcp://127.0.0.1:5555 CAM INT_C3 5 alta
+    python PC1_Sensores/simulador_sensores.py tcp://100.110.49.29:5555 CAM INT_C3 5 alta
     ```
 *   **Sensor de GPS (Velocidad de congestión):**
     ```bash
-    python PC1_Sensores/simulador_sensores.py tcp://127.0.0.1:5555 GPS INT_C3 5 alta
+    python PC1_Sensores/simulador_sensores.py tcp://100.110.49.29:5555 GPS INT_C3 5 alta
     ```
 *   **Sensor de Espira (Conteo vehicular):**
     ```bash
-    python PC1_Sensores/simulador_sensores.py tcp://127.0.0.1:5555 ESP INT_C3 5 alta
+    python PC1_Sensores/simulador_sensores.py tcp://100.110.49.29:5555 ESP INT_C3 5 alta
     ```
 
-### Paso 6: Arrancar el Monitoreo del Operador (PC3)
-Lanza la interfaz de consola interactiva para el operador:
+---
+
+### 6️⃣ PASO 6: Iniciar Interfaz del Operador en el PC3 (`100.90.114.97`)
+Abre una **segunda terminal** en el **PC3** y ejecuta la consola interactiva:
+
 ```bash
-python PC3_Monitoreo/interfaz_monitoreo.py 127.0.0.1 5560 5562 127.0.0.1 5565
+python PC3_Monitoreo/interfaz_monitoreo.py 100.90.114.97 5560 5562 100.87.47.66 5565
 ```
 
 ---
 
-## 🌐 Opción B: Ejecución Distribuida Real (3 Máquinas Virtuales)
+## 🖥️ Opción B: Ejecución en Entorno Local (127.0.0.1)
 
-Cuando despliegues en tres nodos de red, primero asegúrate de que las VMs tengan visibilidad de red (`ping` exitoso) e identifica sus direcciones IP. 
+Si deseas probar el sistema de manera rápida en una sola máquina física usando terminales locales:
 
-Para esta guía de ejemplo, utilizaremos las siguientes IPs simuladas (debes reemplazarlas por las de tu red):
-*   **PC1 (VM1 - Ingesta):** `192.168.1.10`
-*   **PC2 (VM2 - Procesamiento):** `192.168.1.20`
-*   **PC3 (VM3 - Monitoreo):** `192.168.1.30`
-
-### 💻 En el PC1 (`192.168.1.10`)
-1.  **Lanzar Broker central:**
+1.  **Broker (PC1):**
     ```bash
-    python3 PC1_Sensores/broker_zmq.py 192.168.1.10 5555 5556
+    python PC1_Sensores/broker_zmq.py 127.0.0.1 5555 5556
     ```
-2.  **Lanzar Sensores (tantos como requieras para simular la ciudad):**
+2.  **Semáforos (PC2):**
     ```bash
-    python3 PC1_Sensores/simulador_sensores.py tcp://192.168.1.10:5555 CAM INT_C3 5 alta
-    python3 PC1_Sensores/simulador_sensores.py tcp://192.168.1.10:5555 GPS INT_C3 5 alta
-    python3 PC1_Sensores/simulador_sensores.py tcp://192.168.1.10:5555 ESP INT_C3 5 alta
+    python PC2_Procesamiento/control_semaforos.py 127.0.0.1 5557
     ```
-
-### 💻 En el PC2 (`192.168.1.20`)
-1.  **Lanzar Controlador de Semáforos:**
+3.  **BD Réplica (PC2):**
     ```bash
-    python3 PC2_Procesamiento/control_semaforos.py 192.168.1.20 5557
+    python PC2_Procesamiento/base_datos_replica.py 127.0.0.1 5559 5565
     ```
-2.  **Lanzar BD Réplica:**
+4.  **BD Principal (PC3):**
     ```bash
-    python3 PC2_Procesamiento/base_datos_replica.py 192.168.1.20 5559 5565
+    python PC3_Monitoreo/base_datos_principal.py 127.0.0.1 5558 5560 127.0.0.1
     ```
-3.  **Lanzar Servicio de Analítica:**
+5.  **Servicio Analítica (PC2):**
     ```bash
-    python3 PC2_Procesamiento/servicio_analitica.py 192.168.1.20 192.168.1.10 5556 192.168.1.20 5557 192.168.1.30 5558 192.168.1.20 5559 5562
+    python PC2_Procesamiento/servicio_analitica.py 127.0.0.1 127.0.0.1 5556 127.0.0.1 5557 127.0.0.1 5558 127.0.0.1 5559 5562
     ```
-
-### 💻 En el PC3 (`192.168.1.30`)
-1.  **Lanzar BD Principal:** (Apuntando a la réplica en el PC2 para sincronización diferencial):
+6.  **Sensores de Prueba (PC1):**
     ```bash
-    python3 PC3_Monitoreo/base_datos_principal.py 192.168.1.30 5558 5560 192.168.1.20
+    python PC1_Sensores/simulador_sensores.py tcp://127.0.0.1:5555 CAM INT_C3 5 alta
+    python PC1_Sensores/simulador_sensores.py tcp://127.0.0.1:5555 GPS INT_C3 5 alta
+    python PC1_Sensores/simulador_sensores.py tcp://127.0.0.1:5555 ESP INT_C3 5 alta
     ```
-2.  **Lanzar Interfaz de Monitoreo:** (Pasándole como parámetros de backup la IP y puerto de la réplica en PC2):
+7.  **Monitoreo (PC3):**
     ```bash
-    python3 PC3_Monitoreo/interfaz_monitoreo.py 192.168.1.30 5560 5562 192.168.1.20 5565
+    python PC3_Monitoreo/interfaz_monitoreo.py 127.0.0.1 5560 5562 127.0.0.1 5565
     ```
 
 ---
 
-## 🧪 Pruebas de Funcionamiento y Casos de Uso
+## 🧪 Pruebas y Escenarios de Validación
 
-Una vez que todo el sistema distribuido esté corriendo, puedes validar las siguientes funciones clave en vivo:
+Una vez levantado todo el sistema, puedes realizar estas pruebas desde la **Interfaz de Monitoreo (PC3)**:
 
-### 1. Auditoría y Consultas Históricas (REQ/REP)
-*   En la **Interfaz de Monitoreo (PC3)**, presiona la opción `1`, luego `A` para comprobar el estado físico de la Base de Datos. Te devolverá el estado del nodo y el último ID de registro secuencial global sincronizado.
-*   Selecciona la opción `1`, luego `B` para realizar una consulta por rango de tiempo. Ingresa una hora pico aproximada (por ejemplo, `15:10:00` y `15:25:00`). Verás cómo extrae de forma relacional y ultra-rápida desde SQLite el histórico de eventos ordenados cronológicamente.
+### 📊 1. Consultas Históricas
+*   Selecciona `1` y luego `A` para validar que el clúster está en línea y consultar el último ID registrado.
+*   Selecciona `1` y luego `B` para realizar consultas cronológicas sobre la base de datos (ej. entre `15:10:00` y `15:30:00`).
 
-### 2. Priorización de Vía de Emergencia - Ola Verde (REQ/REP -> PUSH/PULL)
-*   En la **Interfaz de Monitoreo**, presiona la opción `2` e ingresa la intersección a despejar (por ejemplo: `INT_C3`).
-*   Mira la pantalla de la terminal de **Control de Semáforos (PC2)**: Verás que de manera instantánea interrumpe su ciclo normal para forzar el semáforo de la Calle a **VERDE** y cerrar la Carrera en **ROJO** durante 30 segundos, registrando detalladamente la auditoría y motivo (`EMERGENCIA_AMBULANCIA: Priorización manual`).
+### 🚑 2. Ola Verde (Prioridad de Emergencias)
+*   Selecciona la opción `2` e ingresa una intersección activa (ej: `INT_C3`).
+*   Verás que en la terminal del controlador de semáforos se suspende el flujo normal para abrir la Calle en **VERDE** durante 30 segundos de manera inmediata.
 
-### 3. Prueba de Caída Crítica y Tolerancia a Fallas en Vivo (Failover Activo)
-1.  Simula un colapso en el nodo principal de persistencia cancelando el proceso de `base_datos_principal.py` en el **PC3** (presionando `Ctrl + C`).
-2.  Ve a la terminal de la **Interfaz de Monitoreo** y realiza una consulta (`Opción 1 -> Opción A`).
-3.  El sistema tardará exactamente 2 segundos, detectará que el PC3 no responde, y de forma **automática y transparente** redireccionará su socket de red para consultar la base de datos réplica en el **PC2**. Recibirás tus datos y el sistema continuará en línea sin interrupciones.
+### 🔌 3. Caída y Failover Transparente
+1.  Detén la base de datos principal en el **PC3** presionando `Ctrl + C`.
+2.  Realiza una consulta en la interfaz de monitoreo (`1 -> A`).
+3.  Verás en pantalla cómo, tras un tiempo de espera de 2 segundos, el sistema redirige la petición a la **BD Réplica (PC2)** de forma transparente sin interrumpir el servicio.
 
-### 4. Recuperación de Consistencia (Sincronización Diferencial)
-1.  Mientras el PC3 sigue caído, mantén los sensores transmitiendo datos. Verás en los logs del PC2 que los registros se siguen respaldando en el archivo `trafico_replica.db`.
-2.  Enciende de nuevo la Base de Datos Principal ejecutando el comando correspondiente en el **PC3**.
-3.  Observa detalladamente los logs iniciales de arranque del PC3: verás que detecta de forma automática los registros perdidos durante su ausencia e inserta mediante lote relacional (`INSERT OR IGNORE`) la diferencia exacta, recuperando la consistencia total del clúster en milisegundos.
-
----
-
-## 📊 Benchmarks de Escalabilidad (Original vs. Multithreading)
-
-Para el informe final de rendimiento, el sistema permite someter las dos arquitecturas de Broker ZMQ a factores de estrés controlados:
-
-### Factores a Evaluar:
-*   **Carga Nominal:** 1 sensor de cada tipo transmitiendo datos cada 10 segundos.
-*   **Carga Crítica (Estrés):** 2 sensores de cada tipo transmitiendo datos cada 5 segundos.
-
-### Variables a Comparar:
-1.  **Cantidad de Solicitudes Registradas:** Cantidad de inserciones seguras que se logran guardar en la base de datos en un intervalo continuo de 2 minutos.
-2.  **Latencia de Actuación:** Tiempo efectivo de propagación desde que el operador activa la Ola Verde en el Monitoreo hasta que el semáforo cambia de luz en la pantalla de control.
-
-Para realizar el experimento, detén el broker monohilo secuencial (`broker_zmq.py`) e inicializa el broker multihilo (`broker_multihilo_zmq.py`) en el PC1, sometiéndolos a los mismos flujos de inyección de sensores. Los datos de inserción se verán reflejados cronológicamente en SQLite para tus tablas y gráficos.
+### 🔄 4. Consistencia y Reconciliación Diferencial
+1.  Mientras el **PC3** sigue apagado, mantén los sensores enviando datos. Verás que la réplica (`PC2`) sigue guardándolos de forma aislada.
+2.  Enciende de nuevo el **PC3** ejecutando su script.
+3.  Observa los logs iniciales en la terminal de la BD Principal: detectará la diferencia exacta con la Réplica y ejecutará una sincronización automática (`INSERT OR IGNORE`) recuperando el estado global de consistencia.
