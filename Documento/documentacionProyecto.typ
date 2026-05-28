@@ -289,7 +289,7 @@ El sistema adopta políticas de diseño robustas ("Hardened Design") para mitiga
 
 === Aplicación del Modelo de Seguridad: Cubo de McCumber
 
-Para evaluar la seguridad de la plataforma GITU de forma holística, se aplica el **Cubo de McCumber**, un marco estándar industrial que analiza la seguridad de la información a través de tres dimensiones críticas: Atributos de Seguridad (Confidencialidad, Integridad y Disponibilidad), Estados de los Datos (Tránsito, Procesamiento y Almacenamiento), y Salvaguardas (Tecnología, Políticas/Prácticas y Factor Humano).
+Para evaluar la seguridad de la plataforma GITU de forma holística, se aplica el *Cubo de McCumber*, un marco estándar industrial que analiza la seguridad de la información a través de tres dimensiones críticas: Atributos de Seguridad (Confidencialidad, Integridad y Disponibilidad), Estados de los Datos (Tránsito, Procesamiento y Almacenamiento), y Salvaguardas (Tecnología, Políticas/Prácticas y Factor Humano).
 
 A continuación se detalla la matriz de aplicación de este modelo de $3 * 3 * 3$ sobre nuestro sistema distribuido:
 
@@ -323,7 +323,7 @@ A continuación se detalla la matriz de aplicación de este modelo de $3 * 3 * 3
   caption: [Matriz del Cubo de McCumber: Relación entre Atributos de Seguridad y Estados de los Datos en la plataforma GITU.],
 ) <tabla-mccumber>
 
-Adicionalmente, estas interacciones se respaldan mediante tres tipos de **Salvaguardas**:
+Adicionalmente, estas interacciones se respaldan mediante tres tipos de *Salvaguardas*:
 
 1. *Tecnología (Medidas Técnicas):* Middleware ZeroMQ (sockets PUSH/PULL/REQ/REP), SQLite local, validadores tipados en Python y VPN de superposición para aislamiento.
 2. *Políticas y Prácticas (Medidas Operativas):* Validación determinista estricta de payloads, sanitización de identificadores con control de longitud y políticas de inserción de control en la base de datos.
