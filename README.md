@@ -16,7 +16,7 @@ pip install pyzmq
 
 ---
 
-## 🌐 Guía de Ejecución Distribuida Real (Tus IPs)
+## 🌐 Guía de Ejecución Distribuida Real
 
 Para desplegar el sistema distribuido de forma real en tus tres nodos configurados, ejecuta los comandos en sus respectivas máquinas **siguiendo estrictamente el orden numérico de los pasos**:
 
