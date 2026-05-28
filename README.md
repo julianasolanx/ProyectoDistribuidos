@@ -6,25 +6,6 @@ El sistema simula una grilla de intersecciones y cuenta con tolerancia a fallos 
 
 ---
 
-## 📐 Arquitectura de Red y Flujo de Datos
-
-El sistema se distribuye en tres nodos físicos o virtuales:
-
-```mermaid
-graph TD
-    PC1_Sensors[Sensores - PC1 100.110.49.29] -->|PUB tcp:5555| Broker[Broker ZMQ - PC1 100.110.49.29]
-    Broker -->|SUB tcp:5556| Analitica[Servicio Analítica - PC2 100.87.47.66]
-    Analitica -->|PUSH tcp:5557| Semaforos[Control Semáforos - PC2 100.87.47.66]
-    Analitica -->|PUSH tcp:5558| BD_Principal[BD Principal - PC3 100.90.114.97:5558]
-    Analitica -->|PUSH tcp:5559| BD_Replica[BD Réplica - PC2 100.87.47.66:5559]
-    BD_Principal -->|REQ/REP tcp:5561| BD_Replica
-    Monitoreo[Interfaz Monitoreo - PC3 100.90.114.97] -->|REQ/REP tcp:5560| BD_Principal
-    Monitoreo -.->|Failover REQ/REP tcp:5565| BD_Replica
-    Monitoreo -->|REQ/REP tcp:5562| Analitica
-```
-
----
-
 ## 🛠️ Requisitos e Instalación
 
 En cada una de las tres máquinas se debe tener instalado Python 3 y la biblioteca de comunicación PyZMQ:

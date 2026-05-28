@@ -196,6 +196,15 @@ El sistema está diseñado para un despliegue distribuido en tres computadores o
 
 Este modelo detalla la arquitectura de software interna mediante un diagrama de clases estructurado, y el flujo de los mensajes mediante diagramas de secuencia para los escenarios clave.
 
+#figure(
+    image(
+      "assets/diagramaSecuencia.drawio.png",
+    ),
+    caption: [
+      Diagrama de Secuencia
+    ],
+  )
+
 === Diagrama de clases
 
 El diseño orientado a objetos y estructurado del software cuenta con las siguientes clases clave que resuelven problemas de negocio, sincronización y validación:
