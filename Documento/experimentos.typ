@@ -212,3 +212,91 @@ Tras estudiar de forma analítica los datos consolidados en los gráficos y tabl
 
 4. *Despreciable Sobrecosto de la Capa de Seguridad:*
    Adicionalmente, se midió que el filtrado estructural y sanitización del `ValidadorSeguridad` en `servicio_analitica.py` toma apenas *0.08 milisegundos* por mensaje. Este resultado demuestra de forma contundente que es posible implementar capas rigurosas de seguridad distribuida sin afectar la latencia crítica de control semafórico en tiempo real.
+
+= Protocolo de Pruebas del Sistema
+
+Este protocolo de pruebas ha sido diseñado para evaluar de forma cuantitativa y cualitativa el comportamiento, escalabilidad, resistencia ante fallos y utilización de recursos de la Plataforma de Gestión Inteligente de Tráfico Urbano (GITU). Se omiten resultados de mediciones con el fin de servir como pliego de validación estructural del sistema.
+
+== 1. Especificaciones de Hardware y Software de Pruebas
+
+Para asegurar condiciones controladas y la repetitividad de los escenarios de validación en el entorno local (127.0.0.1), se definen las siguientes especificaciones estándar para las estaciones de medición:
+
+- *Hardware de Referencia:* Procesador de 4 núcleos físicos o superior, mínimo 8 GB de Memoria RAM, Almacenamiento de estado sólido (SSD).
+- *Software Base:* Sistema operativo compatible (Windows 11 o Linux Ubuntu 22.04 LTS), Python 3.10 o superior, PyZMQ >= 25.0.0, SQLite 3.
+- *Herramientas de Medición:* Utilización de la librería `psutil` para monitoreo de RAM, comando `shutil.disk_usage` para almacenamiento, marcas de tiempo del sistema de microsegundos mediante el módulo `time` de Python y el administrador de recursos nativo del sistema operativo.
+
+== 2. Pruebas de Desempeño
+
+=== ID: 6
+- *Métrica:* Tasa de Ingesta
+- *Escenario de Prueba:* Medir cuántas solicitudes se almacenan en la BD en un intervalo de 2 minutos bajo un flujo masivo y constante de sensores simulados.
+- *Herramienta de Medición:* Contador integrado en el script de la base de datos principal (`base_datos_principal.py`) que registre el total de inserciones físicas exitosas (`total_inserts`) realizadas en una ventana de observación de 120 segundos.
+
+=== ID: 7
+- *Métrica:* Latencia de Acción
+- *Escenario de Prueba:* Medir el retraso temporal desde que un usuario de la interfaz de monitoreo solicita una acción de prioridad ("Ola Verde") en el PC3 hasta que el semáforo cambia físicamente de estado en el controlador del PC2.
+- *Herramienta de Medición:* Cálculo de la diferencia absoluta entre el instante de salida (`timestamp_solicitud` en PC3) y el de recepción (`timestamp_ejecucion` en PC2) utilizando relojes sincronizados localmente.
+
+=== ID: 8
+- *Métrica:* Escalabilidad
+- *Escenario de Prueba:* Comparar la velocidad del procesamiento y correlación de datos analíticos bajo dos niveles de carga diferenciados: escenario base (1 sensor enviando cada 10 segundos) frente a escenario de carga (2 sensores enviando cada 5 segundos).
+- *Herramienta de Medición:* Ejecución de pruebas automatizadas P01 y P02 para ambos escenarios, graficando las curvas de degradación o estabilidad temporal de procesamiento.
+
+=== ID: 9
+- *Métrica:* Carga Progresiva
+- *Escenario de Prueba:* Incrementar de manera secuencial y progresiva los procesos de sensores activos en la cuadrícula urbana, subiendo de 10 en 10 sensores activos de manera controlada hasta llegar a un tope de 50 sensores concurrentes.
+- *Herramienta de Medición:* Observación sistemática del incremento de los tiempos promedio de respuesta y sincronización del buffer de analítica conforme asciende el número de procesos activos.
+
+=== ID: 10
+- *Métrica:* Estrés de Recursos
+- *Escenario de Prueba:* Monitorear el consumo de CPU y memoria RAM en la máquina de analítica mientras se ejecutan 500 hilos de sensores concurrentes en paralelo emitiendo de manera constante.
+- *Herramienta de Medición:* Análisis dinámico mediante herramientas del sistema operativo (`htop` o Administrador de Tareas) para identificar si la CPU llega al 100% de saturación o si existen fugas de memoria en las colas de buffers.
+
+=== ID: 11
+- *Métrica:* Escalabilidad ZMQ
+- *Escenario de Prueba:* Evaluar los límites de concurrencia y retardo del transporte de red de ZeroMQ comparando el comportamiento dinámico con 1 sensor emitiendo a 10s contra 2 sensores emitiendo a 5s.
+- *Herramienta de Medición:* Registro de tiempos de viaje de mensajes y uso proporcional de buffers de red bajo variaciones de tasa de envío para graficar curvas de degradación.
+
+
+== 3. Pruebas de Tolerancia a Fallos
+
+=== ID: 12
+- *Caso de Prueba:* Falla de la Base de Datos Principal (PC3)
+- *Procedimiento:* Simular la caída de la base de datos principal mediante la desconexión del servicio de red o apagando de forma abrupta el proceso correspondiente (`base_datos_principal.py`) mientras la plataforma se encuentra operando y recibiendo telemetría de sensores en tiempo real.
+- *Resultado Esperado:* El Servicio de Analítica debe detectar el error del socket y redirigir todos los flujos de mensajería `PUSH` de respaldo hacia la Base de Datos de Réplica (`base_datos_replica.py`) en el PC2 de forma transparente y sin pérdidas.
+
+=== ID: 13
+- *Caso de Prueba:* Sincronización e Integridad de la Réplica
+- *Procedimiento:* Validar la consistencia de los datos almacenados en los dos servidores de persistencia bajo un flujo de envío ininterrumpido.
+- *Resultado Esperado:* Al comparar el conteo absoluto de registros mediante la consulta `SELECT COUNT(*)` en ambas bases de datos (`trafico_principal.db` y `trafico_replica.db`) tras una ventana de operación de 5 minutos, los resultados numéricos deben ser exactamente idénticos, garantizando consistencia activa total.
+
+=== ID: 14
+- *Caso de Prueba:* Recuperación tras Falla (Health Check & Failback)
+- *Procedimiento:* Simular el restablecimiento del PC3 (Base de Datos Principal) volviendo a iniciar su servicio de red y su proceso de persistencia después de un periodo de inactividad controlado.
+- *Resultado Esperado:* Al re-encenderse, la BD Principal debe conectarse síncronamente a la Réplica en el PC2, realizar una sincronización diferencial autónoma de los registros perdidos mediante `INSERT OR IGNORE`, y los procesos de consulta deben intentar reanudar de forma transparente sus flujos hacia la BD principal o mantener la operación estable en la réplica si el diseño no permite el retorno inmediato.
+
+== 4. Pruebas de Utilización
+
+=== ID: 15
+- *Métrica:* Uso de Memoria
+- *Descripción:* Medir el impacto de memoria RAM que genera la ejecución del Broker central de ZeroMQ en el PC1 bajo condiciones de alta carga.
+- *Meta:* El consumo de memoria del proceso del Broker no debe exceder en ningún caso el 20% de la capacidad disponible para procesos en segundo plano del sistema operativo.
+
+=== ID: 16
+- *Métrica:* Alertas de Recursos
+- *Descripción:* Forzar artificialmente una condición de falta de espacio en disco en el nodo PC2, el cual aloja la base de datos de réplica y respaldo.
+- *Meta:* El sistema debe de ser capaz de interceptar la falta de recursos de hardware y emitir de manera inmediata alertas críticas de advertencia en la terminal de logs para notificar al administrador del riesgo inminente.
+
+
+Conclusiones Generales del Proyecto
+
+Tras completar el diseño, despliegue y formulación del protocolo de validación para la Plataforma de Gestión Inteligente de Tráfico Urbano (GITU), se formulan las siguientes conclusiones de ingeniería:
+
+1. *Desacoplamiento Eficiente mediante Arquitectura de Eventos:* La adopción de patrones de mensajería asíncronos con ZeroMQ (XSUB/XPUB, PUSH/PULL) demostró ser altamente eficiente. Al eliminar las dependencias de red directas y síncronas entre los sensores, el motor de analítica y las bases de datos, se logra que la caída de un servicio (como el de persistencia principal) no afecte el flujo operativo de control semafórico, eliminando así puntos únicos de fallo.
+
+2. *La Importancia de la Tolerancia a Fallas Activa-Pasiva:* La dupla formada por el _failover_ automático en caliente (basado en timeouts de sockets síncronos) y el algoritmo de _reconciliación diferencial_ post-falla, representa una solución idónea para sistemas críticos de infraestructura civil. Esto asegura que el sistema se comporte de forma robusta frente a interrupciones de red, reparando su consistencia en milisegundos una vez vuelve a la normalidad de forma transparente para el operador humano.
+
+3. *Eficiencia en la Multiplexación de E/S con Sockets:* La implementación del patrón Reactor (`zmq.Poller`) en lugar de arquitecturas multi-hilo masivas para la lectura de sockets evita el sobrecosto de contexto del sistema operativo. Esto permite procesar cientos de eventos de tráfico por segundo utilizando una cantidad de memoria RAM insignificante (ID 15) y con bajísimas latencias de conmutación.
+
+4. *Garantías de Seguridad desde el Diseño:* El acoplamiento de validadores de integridad estructural y sanitización estricta de variables en la entrada de la analítica, combinado con el aislamiento de red privada, demuestra que es posible blindar arquitecturas distribuidas de ataques de inyección sin penalizar el rendimiento global ni la velocidad del procesamiento en tiempo real.
+
