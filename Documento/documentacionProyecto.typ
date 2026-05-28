@@ -463,6 +463,76 @@ La Analítica responde de forma síncrona indicando la finalización exitosa del
 }
 `
 
+= Métricas de desempeño
+
+== Metodología de Pruebas de Rendimiento y Obtención de Métricas
+
+Para evaluar de forma cuantitativa el impacto del diseño multihilo frente al monohilo bajo escenarios nominales y de estrés, se define un protocolo experimental riguroso basado en mediciones empíricas sobre el software desarrollado.
+
+=== Definición de las Variables y Escenarios de Carga
+
+Las pruebas se dividen bajo dos configuraciones operativas controladas de inyección de tráfico sobre una intersección de prueba (e.g., `INT_C3`):
+
+1. *Escenario A (Carga Nominal):* 1 sensor simulado de cada tipo (Cámara, GPS y Espira Inductiva) configurados con un intervalo de transmisión fija de 10 segundos. Representa el flujo de operación estándar del sistema urbano.
+2. *Escenario B (Carga de Estrés Crítico):* 2 sensores de cada tipo (totalizando 6 sensores concurrentes) transmitiendo datos con un intervalo acelerado de 5 segundos. Simula condiciones de alta congestión o ráfagas extremas en horas pico viales.
+
+=== Protocolo para la Obtención de las Métricas
+
+==== 1. Medición de Solicitudes Exitosas en 2 Minutos (Rendimiento)
+Esta métrica evalúa la capacidad de procesamiento continuo del middleware y el backend para persistir de manera segura la telemetría. El paso a paso experimental es:
+
+1. *Inicialización del Entorno:* Antes de cada prueba, se deben purgar los registros previos en los nodos de almacenamiento eliminando físicamente las bases de datos locales:
+   - En PC3: `rm -f PC3_Monitoreo/trafico_principal.db`
+   - En PC2: `rm -f PC2_Procesamiento/trafico_replica.db`
+2. *Lanzamiento de los Servicios:* Se levantan los componentes del sistema distribuido configurando el Broker central con la arquitectura deseada:
+   - *Prueba Monohilo:* Ejecutando `PC1_Sensores/broker_zmq.py`.
+   - *Prueba Multihilo:* Ejecutando `PC1_Sensores/broker_multihilo_zmq.py`.
+3. *Cronometraje de Ingesta:* Se inician los procesos del simulador de sensores (`simulador_sensores.py`) de acuerdo al escenario (A o B) y se activa de manera simultánea un temporizador de 120 segundos (2 minutos).
+4. *Interrupción:* Transcurridos los 2 minutos exactos, se detienen todos los sensores en el PC1 enviando una señal de interrupción síncrona (`Ctrl + C` o `SIGINT`).
+5. *Consulta de Consistencia:* En el servidor de base de datos principal (PC3), se realiza una consulta directa al motor SQLite para contar las tuplas relacionales persistidas con éxito:
+   sqlite3 trafico_principal.db "SELECT COUNT*FROM historico_sensores;"
+
+6. El valor devuelto por la consulta se registra como la cantidad total de solicitudes procesadas en el intervalo de evaluación.
+
+==== . Medición de la Latencia de Control en Milisegundos
+La latencia de control ($L_c$) representa el tiempo de propagación de extremo a extremo que le toma al sistema detectar un evento en el PC1 y aplicar la acción correctiva del semáforo en el PC2. Para medir esta variable:
+
+1. Se aprovecha el formateador de tiempo de alta resolución integrado en las funciones de registro (`log`) de los scripts, los cuales capturan el timestamp nativo del sistema con precisión de milisegundos (`%H:%M:%S.%f`):
+   - *Tiempo de Envío ($T_e$):* Registrado en la terminal del PC1 cuando un sensor emite la telemetría:
+     `[15:10:05.120] Publicado exitosamente en Tópico...`
+   - *Tiempo de Actuación ($T_a$):* Registrado en la terminal del PC2 cuando el controlador de semáforos aplica el cambio de fases:
+     `[15:10:05.128] [CONTROL-SEMAFOROS] 🔄 [CAMBIO] Intersección...`
+2. El cálculo de la latencia individual para un evento se determina mediante el delta de tiempo absoluto:
+   $ L_c = T_a - T_e $
+   En el ejemplo ilustrativo:
+   $ L_c = "15:10:05.128" - "15:10:05.120" = 8 " ms" $
+3. Para cada celda experimental se toman muestras de 10 transiciones semafóricas aleatorias a lo largo de la prueba y se calcula su promedio aritmético para mitigar el sesgo por fluctuaciones de red.
+
+=== Tabla de Resultados Experimentales
+
+#figure(
+  table(
+    columns: (2.2fr, 1.2fr, 1.2fr, 1.2fr, 1.2fr),
+    stroke: 0.5pt + black,
+    fill: none,
+    align: (col, row) => if row == 0 { center + horizon } else { left + horizon },
+    table.header(
+      [*Escenario de Carga (Variables Independientes)*],
+      [*Monohilo: Solicitudes (2 min)*],
+      [*Monohilo: Latencia (ms)*],
+      [*Multihilo: Solicitudes (2 min)*],
+      [*Multihilo: Latencia (ms)*],
+    ),
+    [*Escenario A:* 1 sensor de cada tipo cada 10 seg],
+    [ ], [ ], [ ], [ ],
+    [*Escenario B:* 2 sensores de cada tipo cada 5 seg],
+    [ ], [ ], [ ], [ ],
+  ),
+  caption: [Comparativa de Rendimiento y Latencia de Control de la Plataforma GITU.],
+) <tabla-rendimiento-experimento>
+   
+
+
 
     
 
